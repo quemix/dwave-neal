@@ -87,13 +87,13 @@ exec(open("./neal/package_info.py").read())
 
 
 setup(
-    name='dwave-neal',
+    name='neal',
     version=__version__,
     author=__author__,
     author_email=__authoremail__,
     description=__description__,
     long_description=open('README.rst').read(),
-    url='https://github.com/dwavesystems/dwave-neal',
+    url='https://github.com/quemix/dwave-neal',
     license='Apache 2.0',
     classifiers=classifiers,
     packages=packages,

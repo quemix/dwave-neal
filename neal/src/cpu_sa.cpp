@@ -36,6 +36,9 @@ using namespace std;
 // this holds the state of our thread-safe/local RNG
 thread_local uint64_t rng_state[2];
 
+// give some statistics at the end of annealing
+int single_flip = 0, double_flip = 0, rejected_double = 0;
+
 // Returns the energy delta from flipping variable at index `var`
 // @param var the index of the variable to flip
 // @param state the current state of all variables
@@ -100,6 +103,7 @@ void simulated_annealing_run(
     // this double array will hold the delta energy for every variable
     // delta_energy[v] is the delta energy for variable `v`
     double *delta_energy = (double*)malloc(num_vars * sizeof(double));
+    double combined_delta;
 
     uint64_t rand; // this will hold the value of the rng
 
@@ -165,21 +169,30 @@ void simulated_annealing_run(
                 delta_energy[var] *= -1;
 
                 // if we flipped the spin, continue
-                if (flip_spin) continue;
+                if (flip_spin) {
+                        single_flip++;
+                        continue;
+                }
 
                 // otherwise consider second spin flips, note that we could do
                 // a recursive call to simulated_annealing_run, with the
                 // single, current, beta and single sweep but this way it is
                 // probably more straightforward
                 second_flip = false;
-                for (int var2 = 0; var < num_vars; var++) {
+                for (int var2 = 0; var2 < num_vars; var2++) {
                         if (var == var2) continue;
+                        // consider the total energy delta from both flips,
+                        // since delta_energy[var] is flipped subtract it
+                        // Note that if the var2 flip is accepted this might
+                        // affect delta_energy[var], which is why we break
+                        // after an accepted second bit flip
+                        combined_delta = delta_energy[var2]-delta_energy[var];
 
-                        if (delta_energy[var2] >= threshold) continue;
+                        if (combined_delta >= threshold) continue;
 
                         flip_spin2 = false;
 
-                        if (delta_energy[var2] <= 0.0) {
+                        if (combined_delta <= 0.0) {
                             // automatically accept any flip that results in a lower 
                             // energy
                             flip_spin2 = true;
@@ -189,7 +202,7 @@ void simulated_annealing_run(
                             // get a random number, storing it in rand
                             FASTRAND(rand); 
                             // accept the flip if exp(-delta_energy*beta) > random(0, 1)
-                            if (exp(-delta_energy[var2]*beta) * RANDMAX > rand) {
+                            if (exp(-combined_delta*beta) * RANDMAX > rand) {
                                 flip_spin2 = true;
                                 second_flip = true;
                             }
@@ -204,6 +217,8 @@ void simulated_annealing_run(
                                 }
                                 state[var2] *= -1;
                                 delta_energy[var2] *= -1;
+                                double_flip++;
+                                break;
                         }
 
                 }
@@ -218,11 +233,11 @@ void simulated_annealing_run(
                         }
                         state[var] *= -1;
                         delta_energy[var] *= -1;
+                        rejected_double++;
                 }
             }
         }
     }
-
     free(delta_energy);
 }
 
@@ -366,6 +381,7 @@ int general_simulated_annealing(
         // if interrupt_function returns true, stop sampling
         if (interrupt_function && interrupt_callback(interrupt_function)) break;
     }
+    printf("Performed %d single flips and %d double flips, rejected %d double flips\n", single_flip, double_flip, rejected_double);
 
     // return the number of samples we actually took
     return sample;

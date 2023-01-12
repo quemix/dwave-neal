@@ -110,7 +110,7 @@ void simulated_annealing_run(
                                             neighbors, neighbour_couplings);
     }
 
-    bool flip_spin;
+    bool flip_spin, flip_spin2, second_flip;
     // perform the sweeps
     for (int beta_idx = 0; beta_idx < (int)beta_schedule.size(); beta_idx++) {
         // get the beta value for this sweep
@@ -144,29 +144,80 @@ void simulated_annealing_run(
                     }
                 }
 
-                if (flip_spin) {
-                    // since we have accepted the spin flip of variable `var`, 
-                    // we need to adjust the delta energies of all the 
-                    // neighboring variables
-                    const char multiplier = 4 * state[var];
-                    // iterate over the neighbors of `var`
-                    for (int n_i = 0; n_i < degrees[var]; n_i++) {
-                        int neighbor = neighbors[var][n_i];
-                        // adjust the delta energy by 
-                        // 4 * `var` state * coupler weight * neighbor state
-                        // the 4 is because the original contribution from 
-                        // `var` to the neighbor's delta energy was
-                        // 2 * `var` state * coupler weight * neighbor state,
-                        // so since we are flipping `var`'s state, we need to 
-                        // multiply it again by 2 to get the full offset.
-                        delta_energy[neighbor] += multiplier * 
-                            neighbour_couplings[var][n_i] * state[neighbor];
-                    }
+                // flip the spin no matter what the outcome of flip_spin
+                const char multiplier = 4 * state[var];
+                // iterate over the neighbors of `var`
+                for (int n_i = 0; n_i < degrees[var]; n_i++) {
+                    int neighbor = neighbors[var][n_i];
+                    // adjust the delta energy by 
+                    // 4 * `var` state * coupler weight * neighbor state
+                    // the 4 is because the original contribution from 
+                    // `var` to the neighbor's delta energy was
+                    // 2 * `var` state * coupler weight * neighbor state,
+                    // so since we are flipping `var`'s state, we need to 
+                    // multiply it again by 2 to get the full offset.
+                    delta_energy[neighbor] += multiplier * 
+                        neighbour_couplings[var][n_i] * state[neighbor];
+                }
+                // now we just need to flip its state and negate its delta 
+                // energy
+                state[var] *= -1;
+                delta_energy[var] *= -1;
 
-                    // now we just need to flip its state and negate its delta 
-                    // energy
-                    state[var] *= -1;
-                    delta_energy[var] *= -1;
+                // if we flipped the spin, continue
+                if (flip_spin) continue;
+
+                // otherwise consider second spin flips, note that we could do
+                // a recursive call to simulated_annealing_run, with the
+                // single, current, beta and single sweep but this way it is
+                // probably more straightforward
+                second_flip = false;
+                for (int var2 = 0; var < num_vars; var++) {
+                        if (var == var2) continue;
+
+                        if (delta_energy[var2] >= threshold) continue;
+
+                        flip_spin2 = false;
+
+                        if (delta_energy[var2] <= 0.0) {
+                            // automatically accept any flip that results in a lower 
+                            // energy
+                            flip_spin2 = true;
+                            second_flip = true;
+                        }
+                        else {
+                            // get a random number, storing it in rand
+                            FASTRAND(rand); 
+                            // accept the flip if exp(-delta_energy*beta) > random(0, 1)
+                            if (exp(-delta_energy[var2]*beta) * RANDMAX > rand) {
+                                flip_spin2 = true;
+                                second_flip = true;
+                            }
+                        }
+
+                        if (flip_spin2){
+                                const char multiplier = 4 * state[var2];
+                                for (int n_i = 0; n_i < degrees[var2]; n_i++) {
+                                    int neighbor = neighbors[var2][n_i];
+                                    delta_energy[neighbor] += multiplier * 
+                                        neighbour_couplings[var2][n_i] * state[neighbor];
+                                }
+                                state[var2] *= -1;
+                                delta_energy[var2] *= -1;
+                        }
+
+                }
+                // if we have not flipped a second spin, reverse the first spin
+                // flip
+                if (!second_flip){
+                        const char multiplier = 4 * state[var];
+                        for (int n_i = 0; n_i < degrees[var]; n_i++) {
+                            int neighbor = neighbors[var][n_i];
+                            delta_energy[neighbor] += multiplier * 
+                                neighbour_couplings[var][n_i] * state[neighbor];
+                        }
+                        state[var] *= -1;
+                        delta_energy[var] *= -1;
                 }
             }
         }

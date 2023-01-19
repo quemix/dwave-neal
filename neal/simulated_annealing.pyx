@@ -15,6 +15,8 @@
 #
 # =============================================================================
 
+import logging
+
 from libcpp cimport bool
 from libcpp.vector cimport vector
 
@@ -38,9 +40,9 @@ cdef extern from "cpu_sa.h":
             const unsigned long long seed,
             callback interrupt_callback,
             void *interrupt_function,
-            flip_singles,
-            flip_doubles,
-            flip_equals
+            bool flip_singles,
+            bool flip_doubles,
+            bool flip_equals
             ) nogil
 
 
@@ -144,12 +146,18 @@ def simulated_annealing(num_samples, h, coupler_starts, coupler_ends,
     cdef int _sweeps_per_beta = sweeps_per_beta
     cdef vector[double] _beta_schedule = beta_schedule
     cdef unsigned long long _seed = seed
+    cdef bool _flip_singles = flip_singles
+    cdef bool _flip_doubles = flip_doubles
+    cdef bool _flip_equals = flip_equals 
 
     cdef void* _interrupt_function
     if interrupt_function is None:
         _interrupt_function = NULL
     else:
         _interrupt_function = <void *>interrupt_function
+
+    if not flip_singles and not flip_doubles:
+            logging.warning("Disallowed both single flips and double flips, nothing will be flipped..");
 
     with nogil:
         num = general_simulated_annealing(_states,
@@ -164,9 +172,9 @@ def simulated_annealing(num_samples, h, coupler_starts, coupler_ends,
                                           _seed,
                                           interrupt_callback,
                                           _interrupt_function,
-                                          flip_singles,
-                                          flip_doubles,
-                                          flip_equals
+                                          _flip_singles,
+                                          _flip_doubles,
+                                          _flip_equals
                                           )
 
     # discard the noise if we were interrupted

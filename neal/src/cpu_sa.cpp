@@ -114,10 +114,6 @@ void simulated_annealing_run(
 
     uint64_t rand; // this will hold the value of the rng
 
-    if (!flip_singles && !flip_doubles) {
-            printf("Disallowed both single flips and double flips, nothing will be flipped..\n");
-    }
-
     // build the delta_energy array by getting the delta energy for each
     // variable
     for (int var = 0; var < num_vars; var++) {
@@ -187,7 +183,7 @@ void simulated_annealing_run(
                 delta_energy[var] *= -1;
 
                 // if we flipped the spin, continue
-                if (flip_spin && single_num) {
+                if (flip_spin && flip_singles) {
                         single_num++;
                         continue;
                 }

@@ -37,7 +37,7 @@ using namespace std;
 thread_local uint64_t rng_state[2];
 
 // give some statistics at the end of annealing
-int single_flip = 0, double_flip = 0, rejected_double = 0;
+int single_num = 0, double_num = 0, rejected_double_num = 0;
 
 // Returns the energy delta from flipping variable at index `var`
 // @param var the index of the variable to flip
@@ -65,7 +65,7 @@ double get_flip_energy(
         // corresponding coupler weight
         energy += state[neighbors[var][n_i]] * neighbour_couplings[var][n_i];
     }
-    // the value of the variable `energy` is now equal to the sum of the
+    // tie value of the variable `energy` is now equal to the sum of the
     // coefficients of `var`.  we then multiply this by -2 * the state of `var`
     // because the energy delta is given by: (x_i_new - x_i_old) * sum(coefs),
     // and (x_i_new - x_i_old) = -2 * x_i_old
@@ -88,6 +88,10 @@ double get_flip_energy(
 //        `beta_schedule`.
 // @param beta_schedule A list of the beta values to run `sweeps_per_beta`
 //        sweeps at.
+// @param flip_singles, if True allow single flips
+// @param flip_doubles, if True allow double flips
+// @param flip_equals, if True allow double flips of spins with same value
+//     (so 0,0 to 1,1 and vice versa)
 // @return Nothing, but `state` now contains the result of the run.
 void simulated_annealing_run(
     char* state,
@@ -96,7 +100,10 @@ void simulated_annealing_run(
     const vector<vector<int>>& neighbors,
     const vector<vector<double>>& neighbour_couplings,
     const int sweeps_per_beta,
-    const vector<double>& beta_schedule
+    const vector<double>& beta_schedule,
+    bool flip_singles,
+    bool flip_doubles,
+    bool flip_equals
 ) {
     const int num_vars = h.size();
 
@@ -106,6 +113,10 @@ void simulated_annealing_run(
     double combined_delta;
 
     uint64_t rand; // this will hold the value of the rng
+
+    if (!flip_singles && !flip_doubles) {
+            printf("Disallowed both single flips and double flips, nothing will be flipped..\n");
+    }
 
     // build the delta_energy array by getting the delta energy for each
     // variable
@@ -148,7 +159,14 @@ void simulated_annealing_run(
                     }
                 }
 
-                // flip the spin no matter what the outcome of flip_spin
+                if (!flip_doubles && !flip_spin){
+                        // don't do double spin flips and the single spin is
+                        // not flipped so continue
+                        continue;
+                }
+                // if either we flip doubles or flip single spins, flip the
+                // spin (in the case of doubles we flip it to check for the
+                // energy delta in the second flip)
                 const char multiplier = 4 * state[var];
                 // iterate over the neighbors of `var`
                 for (int n_i = 0; n_i < degrees[var]; n_i++) {
@@ -169,8 +187,8 @@ void simulated_annealing_run(
                 delta_energy[var] *= -1;
 
                 // if we flipped the spin, continue
-                if (flip_spin) {
-                        single_flip++;
+                if (flip_spin && single_num) {
+                        single_num++;
                         continue;
                 }
 
@@ -189,6 +207,15 @@ void simulated_annealing_run(
                         combined_delta = delta_energy[var2]-delta_energy[var];
 
                         if (combined_delta >= threshold) continue;
+
+                        if (!flip_equals && state[var2] != state[var]){
+                                // we flipped state[var] so if state[var2] !=
+                                // state[var] this means that the original
+                                // state of var and var2 are equal, if we do
+                                // not want to flip equals we should skip this
+                                // case
+                                continue;
+                        }
 
                         flip_spin2 = false;
 
@@ -217,7 +244,7 @@ void simulated_annealing_run(
                                 }
                                 state[var2] *= -1;
                                 delta_energy[var2] *= -1;
-                                double_flip++;
+                                double_num++;
                                 break;
                         }
 
@@ -233,7 +260,7 @@ void simulated_annealing_run(
                         }
                         state[var] *= -1;
                         delta_energy[var] *= -1;
-                        rejected_double++;
+                        rejected_double_num++;
                 }
             }
         }
@@ -294,6 +321,10 @@ double get_state_energy(
 // @param interrupt_callback A function that is invoked between each run of simulated annealing
 //        if the function returns True then it will stop running.
 // @param interrupt_function A pointer to contents that are passed to interrupt_callback.
+// @param flip_singles, if True allow single flips
+// @param flip_doubles, if True allow double flips
+// @param flip_equals, if True allow double flips of spins with same value
+//     (so 0,0 to 1,1 and vice versa)
 // @return the number of samples taken. If no interrupt occured, will equal num_samples.
 int general_simulated_annealing(
     char* states,
@@ -307,7 +338,10 @@ int general_simulated_annealing(
     const vector<double> beta_schedule,
     const uint64_t seed,
     callback interrupt_callback,
-    void * const interrupt_function
+    void * const interrupt_function,
+    bool flip_singles,
+    bool flip_doubles,
+    bool flip_equals
 ) {
     // TODO 
     // assert len(states) == num_samples*num_vars*sizeof(char)
@@ -370,7 +404,8 @@ int general_simulated_annealing(
         // the sample there
         simulated_annealing_run(state, h, degrees, 
                                 neighbors, neighbour_couplings, 
-                                sweeps_per_beta, beta_schedule);
+                                sweeps_per_beta, beta_schedule,
+                                flip_singles, flip_doubles, flip_equals);
 
         // compute the energy of the sample and store it in `energies`
         energies[sample] = get_state_energy(state, h, coupler_starts, 
@@ -381,7 +416,7 @@ int general_simulated_annealing(
         // if interrupt_function returns true, stop sampling
         if (interrupt_function && interrupt_callback(interrupt_function)) break;
     }
-    printf("Performed %d single flips and %d double flips, rejected %d double flips\n", single_flip, double_flip, rejected_double);
+    printf("Performed %d single flips and %d double flips, rejected %d double flips\n", single_num, double_num, rejected_double_num);
 
     // return the number of samples we actually took
     return sample;

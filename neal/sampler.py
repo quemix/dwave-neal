@@ -106,6 +106,9 @@ class SimulatedAnnealingSampler(dimod.Sampler, dimod.Initialized):
                            'interrupt_function': [],
                            'initial_states': [],
                            'initial_states_generator': [],
+                           'flip_singles': [],
+                           'flip_doubles': [],
+                           'flip_equals': []
                            }
         self.properties = {'beta_schedule_options': ('linear', 'geometric',
                                                      'custom')}
@@ -114,6 +117,7 @@ class SimulatedAnnealingSampler(dimod.Sampler, dimod.Initialized):
                num_sweeps_per_beta=1, beta_schedule_type="geometric", seed=None,
                interrupt_function=None, beta_schedule = None,
                initial_states=None, initial_states_generator="random",
+               flip_singles=True, flip_doubles=False, flip_equals=False,
                **kwargs):
         """Sample from a binary quadratic model using an implemented sample 
         method.
@@ -199,6 +203,20 @@ class SimulatedAnnealingSampler(dimod.Sampler, dimod.Initialized):
                 between each sample of simulated annealing. If the function
                 returns True, then simulated annealing will terminate and return
                 with all of the samples and energies found so far.
+
+            flip_singles: bool
+                If True allow flipping only single spins, in particular if a single
+                spin has been flipped the second is not considered anymore.
+
+            flip_doubles: bool
+                If True, in the for loop of the single spin, if the current spin did
+                not flip, look for a second spin to flip considering the total energy
+                delta.
+
+            flip_equals: bool
+                If True, in the second spin flip for loop only flip spins such that no
+                spins with the same value are flipped (i.e. no 0-0 to 1-1 and vice
+                versa).
 
         Returns:
             :class:`dimod.SampleSet`
@@ -337,7 +355,8 @@ class SimulatedAnnealingSampler(dimod.Sampler, dimod.Initialized):
         samples, energies = sa.simulated_annealing(
             num_reads, ldata, irow, icol, qdata,
             num_sweeps_per_beta, beta_schedule,
-            seed, initial_states_array, interrupt_function)
+            seed, initial_states_array, flip_singles,
+            flip_doubles, flip_equals, interrupt_function)
 
         info = {
             "beta_range": beta_range,

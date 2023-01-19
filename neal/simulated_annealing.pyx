@@ -37,12 +37,17 @@ cdef extern from "cpu_sa.h":
             const vector[double] & beta_schedule,
             const unsigned long long seed,
             callback interrupt_callback,
-            void *interrupt_function) nogil
+            void *interrupt_function,
+            flip_singles,
+            flip_doubles,
+            flip_equals
+            ) nogil
 
 
 def simulated_annealing(num_samples, h, coupler_starts, coupler_ends,
                         coupler_weights, sweeps_per_beta, beta_schedule, seed,
                         np.ndarray[char, ndim=2, mode="c"] states_numpy,
+                        flip_singles, flip_doubles, flip_equals,
                         interrupt_function=None):
     """Wraps `general_simulated_annealing` from `cpu_sa.cpp`. Accepts
     an Ising problem defined on a general graph and returns samples
@@ -87,6 +92,20 @@ def simulated_annealing(num_samples, h, coupler_starts, coupler_ends,
     states_numpy : np.ndarray[char, ndim=2, mode="c"], values in (-1, 1)
         The initial seeded states of the simulated annealing runs. Should be of
         a contiguous numpy.ndarray of shape (num_samples, num_variables).
+
+    flip_singles: bool
+        If True allow flipping only single spins, in particular if a single
+        spin has been flipped the second is not considered anymore.
+
+    flip_doubles: bool
+        If True, in the for loop of the single spin, if the current spin did
+        not flip, look for a second spin to flip considering the total energy
+        delta.
+
+    flip_equals: bool
+        If True, in the second spin flip for loop only flip spins such that no
+        spins with the same value are flipped (i.e. no 0-0 to 1-1 and vice
+        versa).
 
     interrupt_function: function
         Should accept no arguments and return a bool. The function is
@@ -144,7 +163,11 @@ def simulated_annealing(num_samples, h, coupler_starts, coupler_ends,
                                           _beta_schedule,
                                           _seed,
                                           interrupt_callback,
-                                          _interrupt_function)
+                                          _interrupt_function,
+                                          flip_singles,
+                                          flip_doubles,
+                                          flip_equals
+                                          )
 
     # discard the noise if we were interrupted
     return states_numpy[:num], energies_numpy[:num]

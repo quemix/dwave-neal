@@ -114,6 +114,11 @@ void simulated_annealing_run(
 
     uint64_t rand; // this will hold the value of the rng
 
+    if (!flip_singles && !flip_doubles){
+            // Do nothing
+            return;
+    }
+
     // build the delta_energy array by getting the delta energy for each
     // variable
     for (int var = 0; var < num_vars; var++) {

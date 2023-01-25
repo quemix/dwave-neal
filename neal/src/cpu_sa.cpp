@@ -126,7 +126,7 @@ void simulated_annealing_run(
                                             neighbors, neighbour_couplings);
     }
 
-    bool flip_spin, flip_spin2, second_flip;
+    bool flip_spin, flip_spin2;
     // perform the sweeps
     for (int beta_idx = 0; beta_idx < (int)beta_schedule.size(); beta_idx++) {
         // get the beta value for this sweep
@@ -197,8 +197,9 @@ void simulated_annealing_run(
                 // a recursive call to simulated_annealing_run, with the
                 // single, current, beta and single sweep but this way it is
                 // probably more straightforward
-                second_flip = false;
                 for (int var2 = 0; var2 < num_vars; var2++) {
+                        flip_spin2 = false;
+
                         if (var == var2) continue;
                         // consider the total energy delta from both flips,
                         // since delta_energy[var] is flipped subtract it
@@ -213,18 +214,14 @@ void simulated_annealing_run(
                                 // we flipped state[var] so if state[var2] !=
                                 // state[var] this means that the original
                                 // state of var and var2 are equal, if we do
-                                // not want to flip equals we should skip this
-                                // case
+                                // not want to flip equals, skip this case
                                 continue;
                         }
-
-                        flip_spin2 = false;
 
                         if (combined_delta <= 0.0) {
                             // automatically accept any flip that results in a lower 
                             // energy
                             flip_spin2 = true;
-                            second_flip = true;
                         }
                         else {
                             // get a random number, storing it in rand
@@ -232,7 +229,6 @@ void simulated_annealing_run(
                             // accept the flip if exp(-delta_energy*beta) > random(0, 1)
                             if (exp(-combined_delta*beta) * RANDMAX > rand) {
                                 flip_spin2 = true;
-                                second_flip = true;
                             }
                         }
 
@@ -252,7 +248,7 @@ void simulated_annealing_run(
                 }
                 // if we have not flipped a second spin, reverse the first spin
                 // flip
-                if (!second_flip){
+                if (!flip_spin2){
                         const char multiplier = 4 * state[var];
                         for (int n_i = 0; n_i < degrees[var]; n_i++) {
                             int neighbor = neighbors[var][n_i];

@@ -37,7 +37,7 @@ using namespace std;
 thread_local uint64_t rng_state[2];
 
 // give some statistics at the end of annealing
-int single_num = 0, double_num = 0, rejected_double_num = 0;
+int single_num = 0, double_num = 0;
 
 // Returns the energy delta from flipping variable at index `var`
 // @param var the index of the variable to flip
@@ -542,7 +542,7 @@ int general_simulated_annealing(
         // if interrupt_function returns true, stop sampling
         if (interrupt_function && interrupt_callback(interrupt_function)) break;
     }
-    printf("Performed %d single flips and %d double flips, rejected %d double flips\n", single_num, double_num, rejected_double_num);
+    printf("Performed %d single flips and %d double flips.\n", single_num, double_num);
 
     // return the number of samples we actually took
     return sample;

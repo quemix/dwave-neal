@@ -15,14 +15,11 @@
 #
 # =============================================================================
 
-import logging
-
 from libcpp cimport bool
 from libcpp.vector cimport vector
 
 import numpy as np
 cimport numpy as np
-
 
 cdef extern from "cpu_sa.h":
     ctypedef bool (*callback)(void *function)
@@ -35,6 +32,10 @@ cdef extern from "cpu_sa.h":
             const vector[int] & coupler_starts,
             const vector[int] & coupler_ends,
             const vector[double] & coupler_weights,
+            const vector[int] t_coupler_starts,
+            const vector[int] t_coupler_mids,
+            const vector[int] t_coupler_ends,
+            const vector[double] t_coupler_weights,
             const int sweeps_per_beta,
             const vector[double] & beta_schedule,
             const unsigned long long seed,
@@ -42,14 +43,14 @@ cdef extern from "cpu_sa.h":
             void *interrupt_function,
             bool flip_singles,
             bool flip_doubles,
-            bool flip_equals
             ) nogil
 
 
 def simulated_annealing(num_samples, h, coupler_starts, coupler_ends,
-                        coupler_weights, sweeps_per_beta, beta_schedule, seed,
+                        coupler_weights, t_coupler_starts, t_coupler_mids,
+                        t_coupler_ends, t_coupler_weights, sweeps_per_beta, beta_schedule, seed,
                         np.ndarray[char, ndim=2, mode="c"] states_numpy,
-                        flip_singles, flip_doubles, flip_equals,
+                        flip_singles, flip_doubles,
                         interrupt_function=None):
     """Wraps `general_simulated_annealing` from `cpu_sa.cpp`. Accepts
     an Ising problem defined on a general graph and returns samples
@@ -104,11 +105,6 @@ def simulated_annealing(num_samples, h, coupler_starts, coupler_ends,
         not flip, look for a second spin to flip considering the total energy
         delta.
 
-    flip_equals: bool
-        If True, in the second spin flip for loop only flip spins such that no
-        spins with the same value are flipped (i.e. no 0-0 to 1-1 and vice
-        versa).
-
     interrupt_function: function
         Should accept no arguments and return a bool. The function is
         called between samples and if it returns True, simulated annealing
@@ -143,21 +139,21 @@ def simulated_annealing(num_samples, h, coupler_starts, coupler_ends,
     cdef vector[int] _coupler_starts = coupler_starts
     cdef vector[int] _coupler_ends = coupler_ends
     cdef vector[double] _coupler_weights = coupler_weights
+    cdef vector[int] _t_coupler_starts = t_coupler_starts
+    cdef vector[int] _t_coupler_mids = t_coupler_mids
+    cdef vector[int] _t_coupler_ends = t_coupler_ends
+    cdef vector[double] _t_coupler_weights = t_coupler_weights
     cdef int _sweeps_per_beta = sweeps_per_beta
     cdef vector[double] _beta_schedule = beta_schedule
     cdef unsigned long long _seed = seed
     cdef bool _flip_singles = flip_singles
     cdef bool _flip_doubles = flip_doubles
-    cdef bool _flip_equals = flip_equals 
 
     cdef void* _interrupt_function
     if interrupt_function is None:
         _interrupt_function = NULL
     else:
         _interrupt_function = <void *>interrupt_function
-
-    if not flip_singles and not flip_doubles:
-            logging.warning("Disallowed both single flips and double flips, nothing will be flipped..");
 
     with nogil:
         num = general_simulated_annealing(_states,
@@ -167,14 +163,17 @@ def simulated_annealing(num_samples, h, coupler_starts, coupler_ends,
                                           _coupler_starts,
                                           _coupler_ends,
                                           _coupler_weights,
+                                          _t_coupler_starts,
+                                          _t_coupler_mids,
+                                          _t_coupler_ends,
+                                          _t_coupler_weights,
                                           _sweeps_per_beta,
                                           _beta_schedule,
                                           _seed,
                                           interrupt_callback,
                                           _interrupt_function,
                                           _flip_singles,
-                                          _flip_doubles,
-                                          _flip_equals
+                                          _flip_doubles
                                           )
 
     # discard the noise if we were interrupted

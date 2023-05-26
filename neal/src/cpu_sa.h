@@ -33,7 +33,10 @@ double get_flip_energy(
     int var, char *state, const std::vector<double> & h,
     const std::vector<int>& degrees,
     const std::vector<std::vector<int>>& neighbors,
-    const std::vector<std::vector<double>>& neighbour_couplings
+    const std::vector<std::vector<double>>& neighbour_couplings,
+    const std::vector<std::vector<int>>& t_first_ngh,
+    const std::vector<std::vector<int>>& t_second_ngh,
+    const std::vector<std::vector<double>>& t_neighbour_couplings
 );
 
 void simulated_annealing_run(
@@ -41,11 +44,13 @@ void simulated_annealing_run(
     const std::vector<int>& degrees,
     const std::vector<std::vector<int>>& neighbors,
     const std::vector<std::vector<double>>& neighbour_couplings,
+    const std::vector<std::vector<int>>& t_first_ngh,
+    const std::vector<std::vector<int>>& t_second_ngh,
+    const std::vector<std::vector<double>>& t_neighbour_couplings,
     const int sweeps_per_beta,
     const std::vector<double>& beta_schedule,
     bool flip_singles,
-    bool flip_doubles,
-    bool flip_equals
+    bool flip_doubles
 );
 
 typedef bool (*const callback)(void * const function);
@@ -58,14 +63,17 @@ int general_simulated_annealing(
     const std::vector<int> coupler_starts,
     const std::vector<int> coupler_ends,
     const std::vector<double> coupler_values,
+    const std::vector<int> t_coupler_starts,
+    const std::vector<int> t_coupler_mids,
+    const std::vector<int> t_coupler_ends,
+    const std::vector<double> t_coupler_weights,
     const int sweeps_per_beta,
     const std::vector<double> beta_schedule,
     const uint64_t seed,
     callback interrupt_callback,
     void * const interrupt_function,
     bool flip_singles,
-    bool flip_doubles,
-    bool flip_equals
+    bool flip_doubles
 );
 
 #endif

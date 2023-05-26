@@ -58,7 +58,8 @@ double get_flip_energy(
     const vector<int>& t_degrees,
     const vector<vector<int>>& neighbors,
     const vector<vector<double>>& neighbour_couplings,
-    const vector<vector<int[2]>>& t_neighbors,
+    const vector<vector<int>>& t_first_ngh,
+    const vector<vector<int>>& t_second_ngh,
     const vector<vector<double>>& t_neighbour_couplings
 ) {
     double energy = h[var];
@@ -72,7 +73,7 @@ double get_flip_energy(
     for (int n_i = 0; n_i < t_degrees[var]; n_i++) {
         // increase `energy` by the state of the neighbor variable * the
         // corresponding coupler weight
-        energy += state[t_neighbors[var][n_i][0]] * state[t_neighbors[var][n_i][1]] * t_neighbour_couplings[var][n_i];
+        energy += state[t_first_ngh[var][n_i]] * state[t_second_ngh[var][n_i]] * t_neighbour_couplings[var][n_i];
     }
     // tie value of the variable `energy` is now equal to the sum of the
     // coefficients of `var`.  we then multiply this by -2 * the state of `var`
@@ -109,7 +110,8 @@ void simulated_annealing_run(
     const vector<int>& t_degrees,
     const vector<vector<int>>& neighbors,
     const vector<vector<double>>& neighbour_couplings,
-    const vector<vector<int[2]>>& t_neighbors,
+    const vector<vector<int>>& t_first_ngh,
+    const vector<vector<int>>& t_second_ngh,
     const vector<vector<double>>& t_neighbour_couplings,
     const int sweeps_per_beta,
     const vector<double>& beta_schedule,
@@ -135,10 +137,10 @@ void simulated_annealing_run(
     for (int var = 0; var < num_vars; var++) {
         delta_energy[var] = get_flip_energy(var, state, h, degrees, t_degrees,
                                             neighbors, neighbour_couplings,
-                                            t_neighbors, t_neighbour_couplings);
+                                            t_first_ngh, t_second_ngh, t_neighbour_couplings);
     }
 
-    bool flip_spin, flip_spin2;
+    bool flip_spin;
     // perform the sweeps
     for (int beta_idx = 0; beta_idx < (int)beta_schedule.size(); beta_idx++) {
         // get the beta value for this sweep
@@ -196,13 +198,14 @@ void simulated_annealing_run(
                                 neighbour_couplings[var][n_i] * state[neighbor];
                         }
                         for (int n_i = 0; n_i < t_degrees[var]; n_i++) {
-                            int t_neighbor_pair[2] = t_neighbors[var][n_i];
+                            int t_neighbor_0 = t_first_ngh[var][n_i];
+                            int t_neighbor_1 = t_second_ngh[var][n_i];
                             // same as above just that we consider the
                             // third-order contributions
                             double factor = multiplier * t_neighbour_couplings[var][n_i] *
-                                    state[t_neighbor_pair[0]] * state[t_neighbor_pair[1]];
-                            delta_energy[t_neighbor_pair[0]] += factor;
-                            delta_energy[t_neighbor_pair[1]] += factor;
+                                    state[t_neighbor_0] * state[t_neighbor_1];
+                            delta_energy[t_neighbor_0] += factor;
+                            delta_energy[t_neighbor_1] += factor;
                         }
                         // now we just need to flip its state and negate its delta 
                         // energy
@@ -216,7 +219,7 @@ void simulated_annealing_run(
             if (flip_doubles) {
                 for (int var = 0; var < num_vars; var++) {
                     flip_spin = true;
-                    for (int var2 = var + 1; var < num_vars; var++) {
+                    for (int var2 = var + 1; var2 < num_vars; var2++) {
                         if (flip_spin){
                             // flip the first spin since we need to evaluate
                             // the delta after flipping the second spin
@@ -230,11 +233,12 @@ void simulated_annealing_run(
                                     neighbour_couplings[var][n_i] * state[neighbor];
                             }
                             for (int n_i = 0; n_i < t_degrees[var]; n_i++) {
-                                int t_neighbor_pair[2] = t_neighbors[var][n_i];
+                                int t_neighbor_0 = t_first_ngh[var][n_i];
+                                int t_neighbor_1 = t_second_ngh[var][n_i];
                                 double factor = multiplier * t_neighbour_couplings[var][n_i] *
-                                        state[t_neighbor_pair[0]] * state[t_neighbor_pair[1]];
-                                delta_energy[t_neighbor_pair[0]] += factor;
-                                delta_energy[t_neighbor_pair[1]] += factor;
+                                        state[t_neighbor_0] * state[t_neighbor_1];
+                                delta_energy[t_neighbor_0] += factor;
+                                delta_energy[t_neighbor_1] += factor;
                             }
                             state[var] *= -1;
                             delta_energy[var] *= -1;
@@ -282,14 +286,16 @@ void simulated_annealing_run(
                                     neighbour_couplings[var2][n_i] * state[neighbor];
                             }
                             for (int n_i = 0; n_i < t_degrees[var2]; n_i++) {
+                                int t_neighbor_1 = t_first_ngh[var2][n_i];
+                                int t_neighbor_2 = t_second_ngh[var2][n_i];
                                 double factor = multiplier * t_neighbour_couplings[var2][n_i] *
-                                        state[t_neighbors[var2][n_i][0]] * state[t_neighbors[var2][n_i][1]];
-                                delta_energy[t_neighbors[var2][n_i][0]] += factor;
-                                delta_energy[t_neighbors[var2][n_i][1]] += factor;
+                                        state[t_neighbor_1] * state[t_neighbor_2];
+                                delta_energy[t_neighbor_1] += factor;
+                                delta_energy[t_neighbor_2] += factor;
                             }
                             state[var2] *= -1;
                             delta_energy[var2] *= -1;
-                            single_num++;
+                            double_num++;
                         }
 
                     }
@@ -303,11 +309,12 @@ void simulated_annealing_run(
                                 neighbour_couplings[var][n_i] * state[neighbor];
                         }
                         for (int n_i = 0; n_i < t_degrees[var]; n_i++) {
-                            int t_neighbor_pair[2] = t_neighbors[var][n_i];
+                            int t_neighbor_1 = t_first_ngh[var][n_i];
+                            int t_neighbor_2 = t_second_ngh[var][n_i];
                             double factor = multiplier * t_neighbour_couplings[var][n_i] *
-                                    state[t_neighbor_pair[0]] * state[t_neighbor_pair[1]];
-                            delta_energy[t_neighbor_pair[0]] += factor;
-                            delta_energy[t_neighbor_pair[1]] += factor;
+                                    state[t_neighbor_1] * state[t_neighbor_2];
+                            delta_energy[t_neighbor_1] += factor;
+                            delta_energy[t_neighbor_2] += factor;
                         }
                         state[var] *= -1;
                         delta_energy[var] *= -1;
@@ -335,7 +342,11 @@ double get_state_energy(
     const vector<double>& h,
     const vector<int>& coupler_starts,
     const vector<int>& coupler_ends,
-    const vector<double>& coupler_weights
+    const vector<double>& coupler_weights,
+    const vector<int>& t_coupler_starts,
+    const vector<int>& t_coupler_mids,
+    const vector<int>& t_coupler_ends,
+    const vector<double>& t_coupler_weights
 ) {
     double energy = 0.0;
     // sum the energy due to local fields on variables
@@ -345,6 +356,10 @@ double get_state_energy(
     // sum the energy due to coupling weights
     for (unsigned int c = 0; c < coupler_starts.size(); c++) {
         energy += state[coupler_starts[c]] * coupler_weights[c] * state[coupler_ends[c]];
+    }
+    // sum the energy due to third order terms
+    for (unsigned int c = 0; c < t_coupler_starts.size(); c++) {
+        energy += state[t_coupler_starts[c]] * t_coupler_weights[c] * state[t_coupler_mids[c]] * state[t_coupler_ends[c]];
     }
     return energy;
 }
@@ -438,13 +453,16 @@ int general_simulated_annealing(
     // t_degrees will be a vector the number of triple pairings of each
     // variable
     vector<int> t_degrees(num_vars, 0);
-    // t_neighbors is a vector of vectors of tuples, such that neighbors[i][j]
-    // contains the j-th pair such that (i, j[0], j[1]) have a triple coupling
-    vector<vector<int[2]>> t_neighbors(num_vars);
+    // t_first/second_ngh is a vector as neighbors providing the first and
+    // escond neighbor of the third-order couplings respectively notice that
+    // since this maps a vector to pairs of vectors these arrays have to have
+    // size num_vars^2
+    vector<vector<int>> t_first_ngh(num_vars*num_vars);
+    vector<vector<int>> t_second_ngh(num_vars*num_vars);
     // neighbour_couplings is another vector of vectors with the same structure
     // except neighbour_couplings[i][j] is the weight on the coupling between i
-    // and its jth pair
-    vector<vector<double>> t_neighbour_couplings(num_vars);
+    // and its jth first and second neighbor
+    vector<vector<double>> t_neighbour_couplings(num_vars*num_vars);
 
     // build the degrees, neighbors, and neighbour_couplings vectors by
     // iterating over the input coupler vectors
@@ -477,14 +495,14 @@ int general_simulated_annealing(
             throw runtime_error("coupler indexes contain an invalid variable");
         }
         // add v to u's neighbors list and vice versa
-        int local_pair[2] = {v, w};
-        t_neighbors[u].push_back(local_pair);
+        t_first_ngh[u].push_back(v);
+        t_second_ngh[u].push_back(w);
 
-        int local_pair[2] = {w, u};
-        t_neighbors[v].push_back(local_pair);
+        t_first_ngh[v].push_back(w);
+        t_second_ngh[v].push_back(u);
 
-        int local_pair[2] = {u, v};
-        t_neighbors[w].push_back(local_pair);
+        t_first_ngh[w].push_back(u);
+        t_second_ngh[w].push_back(v);
 
         // add the weights
         t_neighbour_couplings[u].push_back(t_coupler_weights[cplr]);
@@ -507,9 +525,9 @@ int general_simulated_annealing(
         char *state = states + sample*num_vars;
         // then do the actual sample. this function will modify state, storing
         // the sample there
-        simulated_annealing_run(state, h, degrees, t_degrees
+        simulated_annealing_run(state, h, degrees, t_degrees,
                                 neighbors, neighbour_couplings, 
-                                t_neighbors, t_neighbour_couplings, 
+                                t_first_ngh, t_second_ngh, t_neighbour_couplings, 
                                 sweeps_per_beta, beta_schedule,
                                 flip_singles, flip_doubles);
 

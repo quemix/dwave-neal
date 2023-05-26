@@ -108,7 +108,6 @@ class SimulatedAnnealingSampler(dimod.Sampler, dimod.Initialized):
                            'initial_states_generator': [],
                            'flip_singles': [],
                            'flip_doubles': [],
-                           'flip_equals': []
                            }
         self.properties = {'beta_schedule_options': ('linear', 'geometric',
                                                      'custom')}
@@ -117,7 +116,7 @@ class SimulatedAnnealingSampler(dimod.Sampler, dimod.Initialized):
                num_sweeps_per_beta=1, beta_schedule_type="geometric", seed=None,
                interrupt_function=None, beta_schedule = None,
                initial_states=None, initial_states_generator="random",
-               flip_singles=True, flip_doubles=False, flip_equals=False,
+               flip_singles=True, flip_doubles=False,
                **kwargs):
         """Sample from a binary quadratic model using an implemented sample 
         method.
@@ -212,11 +211,6 @@ class SimulatedAnnealingSampler(dimod.Sampler, dimod.Initialized):
                 If True, in the for loop of the single spin, if the current spin did
                 not flip, look for a second spin to flip considering the total energy
                 delta.
-
-            flip_equals: bool
-                If True, in the second spin flip for loop only flip spins such that no
-                spins with the same value are flipped (i.e. no 0-0 to 1-1 and vice
-                versa).
 
         Returns:
             :class:`dimod.SampleSet`
@@ -356,7 +350,7 @@ class SimulatedAnnealingSampler(dimod.Sampler, dimod.Initialized):
             num_reads, ldata, irow, icol, qdata,
             num_sweeps_per_beta, beta_schedule,
             seed, initial_states_array, flip_singles,
-            flip_doubles, flip_equals, interrupt_function)
+            flip_doubles, interrupt_function)
 
         info = {
             "beta_range": beta_range,

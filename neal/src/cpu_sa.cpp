@@ -55,8 +55,11 @@ double get_flip_energy(
     char *state,
     const vector<double>& h,
     const vector<int>& degrees,
+    const vector<int>& t_degrees,
     const vector<vector<int>>& neighbors,
-    const vector<vector<double>>& neighbour_couplings
+    const vector<vector<double>>& neighbour_couplings,
+    const vector<vector<int[2]>>& t_neighbors,
+    const vector<vector<double>>& t_neighbour_couplings
 ) {
     double energy = h[var];
     // iterate over the neighbors of variable `var`
@@ -64,6 +67,12 @@ double get_flip_energy(
         // increase `energy` by the state of the neighbor variable * the
         // corresponding coupler weight
         energy += state[neighbors[var][n_i]] * neighbour_couplings[var][n_i];
+    }
+
+    for (int n_i = 0; n_i < t_degrees[var]; n_i++) {
+        // increase `energy` by the state of the neighbor variable * the
+        // corresponding coupler weight
+        energy += state[t_neighbors[var][n_i][0]] * state[t_neighbors[var][n_i][1]] * t_neighbour_couplings[var][n_i];
     }
     // tie value of the variable `energy` is now equal to the sum of the
     // coefficients of `var`.  we then multiply this by -2 * the state of `var`
@@ -97,13 +106,15 @@ void simulated_annealing_run(
     char* state,
     const vector<double>& h,
     const vector<int>& degrees,
+    const vector<int>& t_degrees,
     const vector<vector<int>>& neighbors,
     const vector<vector<double>>& neighbour_couplings,
+    const vector<vector<int[2]>>& t_neighbors,
+    const vector<vector<double>>& t_neighbour_couplings,
     const int sweeps_per_beta,
     const vector<double>& beta_schedule,
     bool flip_singles,
-    bool flip_doubles,
-    bool flip_equals
+    bool flip_doubles
 ) {
     const int num_vars = h.size();
 
@@ -122,8 +133,9 @@ void simulated_annealing_run(
     // build the delta_energy array by getting the delta energy for each
     // variable
     for (int var = 0; var < num_vars; var++) {
-        delta_energy[var] = get_flip_energy(var, state, h, degrees,
-                                            neighbors, neighbour_couplings);
+        delta_energy[var] = get_flip_energy(var, state, h, degrees, t_degrees,
+                                            neighbors, neighbour_couplings,
+                                            t_neighbors, t_neighbour_couplings);
     }
 
     bool flip_spin, flip_spin2;
@@ -132,7 +144,6 @@ void simulated_annealing_run(
         // get the beta value for this sweep
         const double beta = beta_schedule[beta_idx];
         for (int sweep = 0; sweep < sweeps_per_beta; sweep++) {
-
             // this threshold will allow us to skip the metropolis update for
             // variables that have zero chance of getting flipped.
             // our RNG generates 64 bit integers, so we have a resolution of
@@ -141,126 +152,169 @@ void simulated_annealing_run(
             // the probability.
             const double threshold = 44.36142 / beta;
 
-            for (int var = 0; var < num_vars; var++) {
-                if (delta_energy[var] >= threshold) continue;
+            if (flip_singles) {
+                for (int var = 0; var < num_vars; var++) {
+                    if (delta_energy[var] >= threshold) continue;
 
-                flip_spin = false;
+                    flip_spin = false;
 
-                if (delta_energy[var] <= 0.0) {
-                    // automatically accept any flip that results in a lower 
-                    // energy
-                    flip_spin = true;
-                }
-                else {
-                    // get a random number, storing it in rand
-                    FASTRAND(rand); 
-                    // accept the flip if exp(-delta_energy*beta) > random(0, 1)
-                    if (exp(-delta_energy[var]*beta) * RANDMAX > rand) {
+                    if (delta_energy[var] <= 0.0) {
+                        // automatically accept any flip that results in a lower 
+                        // energy
                         flip_spin = true;
                     }
-                }
+                    else {
+                        // get a random number, storing it in rand
+                        FASTRAND(rand); 
+                        // accept the flip if exp(-delta_energy*beta) > random(0, 1)
+                        if (exp(-delta_energy[var]*beta) * RANDMAX > rand) {
+                            flip_spin = true;
+                        }
+                    }
 
-                if (!flip_doubles && !flip_spin){
-                        // don't do double spin flips and the single spin is
-                        // not flipped so continue
-                        continue;
-                }
-                // if either we flip doubles or flip single spins, flip the
-                // spin (in the case of doubles we flip it to check for the
-                // energy delta in the second flip)
-                const char multiplier = 4 * state[var];
-                // iterate over the neighbors of `var`
-                for (int n_i = 0; n_i < degrees[var]; n_i++) {
-                    int neighbor = neighbors[var][n_i];
-                    // adjust the delta energy by 
-                    // 4 * `var` state * coupler weight * neighbor state
-                    // the 4 is because the original contribution from 
-                    // `var` to the neighbor's delta energy was
-                    // 2 * `var` state * coupler weight * neighbor state,
-                    // so since we are flipping `var`'s state, we need to 
-                    // multiply it again by 2 to get the full offset.
-                    delta_energy[neighbor] += multiplier * 
-                        neighbour_couplings[var][n_i] * state[neighbor];
-                }
-                // now we just need to flip its state and negate its delta 
-                // energy
-                state[var] *= -1;
-                delta_energy[var] *= -1;
-
-                // if we flipped the spin, continue
-                if (flip_spin && flip_singles) {
+                    if (!flip_doubles && !flip_spin){
+                            // don't do double spin flips and the single spin is
+                            // not flipped so continue
+                            continue;
+                    }
+                    if (flip_spin){
+                        // since we have accepted the spin flip of variable `var`, 
+                        // we need to adjust the delta energies of all the 
+                        // neighboring variables
+                        const char multiplier = 4 * state[var];
+                        // iterate over the neighbors of `var`
+                        for (int n_i = 0; n_i < degrees[var]; n_i++) {
+                            int neighbor = neighbors[var][n_i];
+                            // adjust the delta energy by 
+                            // 4 * `var` state * coupler weight * neighbor state
+                            // the 4 is because the original contribution from 
+                            // `var` to the neighbor's delta energy was
+                            // 2 * `var` state * coupler weight * neighbor state,
+                            // so since we are flipping `var`'s state, we need to 
+                            // multiply it again by 2 to get the full offset.
+                            delta_energy[neighbor] += multiplier * 
+                                neighbour_couplings[var][n_i] * state[neighbor];
+                        }
+                        for (int n_i = 0; n_i < t_degrees[var]; n_i++) {
+                            int t_neighbor_pair[2] = t_neighbors[var][n_i];
+                            // same as above just that we consider the
+                            // third-order contributions
+                            double factor = multiplier * t_neighbour_couplings[var][n_i] *
+                                    state[t_neighbor_pair[0]] * state[t_neighbor_pair[1]];
+                            delta_energy[t_neighbor_pair[0]] += factor;
+                            delta_energy[t_neighbor_pair[1]] += factor;
+                        }
+                        // now we just need to flip its state and negate its delta 
+                        // energy
+                        state[var] *= -1;
+                        delta_energy[var] *= -1;
                         single_num++;
-                        continue;
+                    }
                 }
+            }
 
-                // otherwise consider second spin flips, note that we could do
-                // a recursive call to simulated_annealing_run, with the
-                // single, current, beta and single sweep but this way it is
-                // probably more straightforward
-                for (int var2 = 0; var2 < num_vars; var2++) {
-                        flip_spin2 = false;
+            if (flip_doubles) {
+                for (int var = 0; var < num_vars; var++) {
+                    flip_spin = true;
+                    for (int var2 = var + 1; var < num_vars; var++) {
+                        if (flip_spin){
+                            // flip the first spin since we need to evaluate
+                            // the delta after flipping the second spin
+                            // but only do so if the second spin has actually
+                            // been flipped (or on the first iteration) otherwise
+                            // we can just continue the loop
+                            const char multiplier = 4 * state[var];
+                            for (int n_i = 0; n_i < degrees[var]; n_i++) {
+                                int neighbor = neighbors[var][n_i];
+                                delta_energy[neighbor] += multiplier * 
+                                    neighbour_couplings[var][n_i] * state[neighbor];
+                            }
+                            for (int n_i = 0; n_i < t_degrees[var]; n_i++) {
+                                int t_neighbor_pair[2] = t_neighbors[var][n_i];
+                                double factor = multiplier * t_neighbour_couplings[var][n_i] *
+                                        state[t_neighbor_pair[0]] * state[t_neighbor_pair[1]];
+                                delta_energy[t_neighbor_pair[0]] += factor;
+                                delta_energy[t_neighbor_pair[1]] += factor;
+                            }
+                            state[var] *= -1;
+                            delta_energy[var] *= -1;
+                            // reset the flip_spin variable
+                            flip_spin = false;
+                        }
 
-                        if (var == var2) continue;
-                        // consider the total energy delta from both flips,
-                        // since delta_energy[var] is flipped subtract it
-                        // Note that if the var2 flip is accepted this might
-                        // affect delta_energy[var], which is why we break
-                        // after an accepted second bit flip
+                        if (state[var2] != state[var]){
+                                // we flipped state[var] so if state[var2] !=
+                                // state[var] this means that the original
+                                // state of var and var2 are equal, the
+                                // double flip case only should flip -1 and
+                                // 1
+                                continue;
+                        }
+
+                        // consider the energy delta you get from flipping
+                        // both spins since delta_energy[var] has been negated
+                        // we need to substract it to get the toal cost of
+                        // flipping both spins
                         combined_delta = delta_energy[var2]-delta_energy[var];
 
                         if (combined_delta >= threshold) continue;
 
-                        if (!flip_equals && state[var2] != state[var]){
-                                // we flipped state[var] so if state[var2] !=
-                                // state[var] this means that the original
-                                // state of var and var2 are equal, if we do
-                                // not want to flip equals, skip this case
-                                continue;
-                        }
-
                         if (combined_delta <= 0.0) {
                             // automatically accept any flip that results in a lower 
                             // energy
-                            flip_spin2 = true;
+                            flip_spin = true;
                         }
                         else {
                             // get a random number, storing it in rand
                             FASTRAND(rand); 
                             // accept the flip if exp(-delta_energy*beta) > random(0, 1)
                             if (exp(-combined_delta*beta) * RANDMAX > rand) {
-                                flip_spin2 = true;
+                                flip_spin = true;
                             }
                         }
 
-                        if (flip_spin2){
-                                const char multiplier = 4 * state[var2];
-                                for (int n_i = 0; n_i < degrees[var2]; n_i++) {
-                                    int neighbor = neighbors[var2][n_i];
-                                    delta_energy[neighbor] += multiplier * 
-                                        neighbour_couplings[var2][n_i] * state[neighbor];
-                                }
-                                state[var2] *= -1;
-                                delta_energy[var2] *= -1;
-                                double_num++;
-                                break;
+                        if (flip_spin){
+                            // flip var2
+                            const char multiplier = 4 * state[var2];
+                            for (int n_i = 0; n_i < degrees[var2]; n_i++) {
+                                int neighbor = neighbors[var2][n_i];
+                                delta_energy[neighbor] += multiplier * 
+                                    neighbour_couplings[var2][n_i] * state[neighbor];
+                            }
+                            for (int n_i = 0; n_i < t_degrees[var2]; n_i++) {
+                                double factor = multiplier * t_neighbour_couplings[var2][n_i] *
+                                        state[t_neighbors[var2][n_i][0]] * state[t_neighbors[var2][n_i][1]];
+                                delta_energy[t_neighbors[var2][n_i][0]] += factor;
+                                delta_energy[t_neighbors[var2][n_i][1]] += factor;
+                            }
+                            state[var2] *= -1;
+                            delta_energy[var2] *= -1;
+                            single_num++;
                         }
 
-                }
-                // if we have not flipped a second spin, reverse the first spin
-                // flip
-                if (!flip_spin2){
+                    }
+                    if (!flip_spin){
+                        // if we finish the inner loop and the last iteration
+                        // does not do a spin flip flip the first spin back
                         const char multiplier = 4 * state[var];
                         for (int n_i = 0; n_i < degrees[var]; n_i++) {
                             int neighbor = neighbors[var][n_i];
                             delta_energy[neighbor] += multiplier * 
                                 neighbour_couplings[var][n_i] * state[neighbor];
                         }
+                        for (int n_i = 0; n_i < t_degrees[var]; n_i++) {
+                            int t_neighbor_pair[2] = t_neighbors[var][n_i];
+                            double factor = multiplier * t_neighbour_couplings[var][n_i] *
+                                    state[t_neighbor_pair[0]] * state[t_neighbor_pair[1]];
+                            delta_energy[t_neighbor_pair[0]] += factor;
+                            delta_energy[t_neighbor_pair[1]] += factor;
+                        }
                         state[var] *= -1;
                         delta_energy[var] *= -1;
-                        rejected_double_num++;
-                }
+                    }
             }
         }
+    }
     }
     free(delta_energy);
 }
@@ -310,6 +364,14 @@ double get_state_energy(
 //        of each coupler in the problem
 // @param coupler_weights a double vector containing the weights of the couplers
 //        in the same order as coupler_starts and coupler_ends
+// @param t_coupler_starts an int vector containing the first coordinate of
+//          triple-couplings
+// @param t_coupler_mids an int vector containing the second coordinate of
+//          triple-couplings
+// @param t_coupler_ends an int vector containing the variables of the other side 
+//        of each triple coupler in the problem
+// @param t_coupler_weights a double vector containing the weights of the couplers
+//        in the same order as t_coupler_starts, t_coupler_mids and coupler_ends
 // @param sweeps_per_beta The number of sweeps to perform at each beta value.
 //        Total number of sweeps is `sweeps_per_beta` * length of
 //        `beta_schedule`.
@@ -320,8 +382,6 @@ double get_state_energy(
 // @param interrupt_function A pointer to contents that are passed to interrupt_callback.
 // @param flip_singles, if True allow single flips
 // @param flip_doubles, if True allow double flips
-// @param flip_equals, if True allow double flips of spins with same value
-//     (so 0,0 to 1,1 and vice versa)
 // @return the number of samples taken. If no interrupt occured, will equal num_samples.
 int general_simulated_annealing(
     char* states,
@@ -331,14 +391,17 @@ int general_simulated_annealing(
     const vector<int> coupler_starts,
     const vector<int> coupler_ends,
     const vector<double> coupler_weights,
+    const vector<int> t_coupler_starts,
+    const vector<int> t_coupler_mids,
+    const vector<int> t_coupler_ends,
+    const vector<double> t_coupler_weights,
     const int sweeps_per_beta,
     const vector<double> beta_schedule,
     const uint64_t seed,
     callback interrupt_callback,
     void * const interrupt_function,
     bool flip_singles,
-    bool flip_doubles,
-    bool flip_equals
+    bool flip_doubles
 ) {
     // TODO 
     // assert len(states) == num_samples*num_vars*sizeof(char)
@@ -350,6 +413,11 @@ int general_simulated_annealing(
     if (!((coupler_starts.size() == coupler_ends.size()) &&
                 (coupler_starts.size() == coupler_weights.size()))) {
         throw runtime_error("coupler vectors have mismatched lengths");
+    }
+    if (!((t_coupler_starts.size() == t_coupler_mids.size()) &&
+                (t_coupler_starts.size() == t_coupler_ends.size()) && 
+                (t_coupler_starts.size() == t_coupler_weights.size()))) {
+        throw runtime_error("triple coupler vectors have mismatched lengths");
     }
     
     // set the seed of the RNG
@@ -367,8 +435,19 @@ int general_simulated_annealing(
     // and its jth neighbor
     vector<vector<double>> neighbour_couplings(num_vars);
 
+    // t_degrees will be a vector the number of triple pairings of each
+    // variable
+    vector<int> t_degrees(num_vars, 0);
+    // t_neighbors is a vector of vectors of tuples, such that neighbors[i][j]
+    // contains the j-th pair such that (i, j[0], j[1]) have a triple coupling
+    vector<vector<int[2]>> t_neighbors(num_vars);
+    // neighbour_couplings is another vector of vectors with the same structure
+    // except neighbour_couplings[i][j] is the weight on the coupling between i
+    // and its jth pair
+    vector<vector<double>> t_neighbour_couplings(num_vars);
+
     // build the degrees, neighbors, and neighbour_couplings vectors by
-    // iterating over the inputted coupler vectors
+    // iterating over the input coupler vectors
     for (unsigned int cplr = 0; cplr < coupler_starts.size(); cplr++) {
         int u = coupler_starts[cplr];
         int v = coupler_ends[cplr];
@@ -389,6 +468,35 @@ int general_simulated_annealing(
         degrees[v]++;
     }
 
+    for (unsigned int cplr = 0; cplr < t_coupler_starts.size(); cplr++) {
+        int u = t_coupler_starts[cplr];
+        int v = t_coupler_mids[cplr];
+        int w = t_coupler_ends[cplr];
+
+        if ((u < 0) || (v < 0) || (w < 0) || (u >= num_vars) || (v >= num_vars) || (w >= num_vars)) {
+            throw runtime_error("coupler indexes contain an invalid variable");
+        }
+        // add v to u's neighbors list and vice versa
+        int local_pair[2] = {v, w};
+        t_neighbors[u].push_back(local_pair);
+
+        int local_pair[2] = {w, u};
+        t_neighbors[v].push_back(local_pair);
+
+        int local_pair[2] = {u, v};
+        t_neighbors[w].push_back(local_pair);
+
+        // add the weights
+        t_neighbour_couplings[u].push_back(t_coupler_weights[cplr]);
+        t_neighbour_couplings[v].push_back(t_coupler_weights[cplr]);
+        t_neighbour_couplings[w].push_back(t_coupler_weights[cplr]);
+
+        // increase the degrees of both variables
+        t_degrees[u]++;
+        t_degrees[v]++;
+        t_degrees[w]++;
+    }
+
 
     // get the simulated annealing samples
     int sample = 0;
@@ -399,14 +507,17 @@ int general_simulated_annealing(
         char *state = states + sample*num_vars;
         // then do the actual sample. this function will modify state, storing
         // the sample there
-        simulated_annealing_run(state, h, degrees, 
+        simulated_annealing_run(state, h, degrees, t_degrees
                                 neighbors, neighbour_couplings, 
+                                t_neighbors, t_neighbour_couplings, 
                                 sweeps_per_beta, beta_schedule,
-                                flip_singles, flip_doubles, flip_equals);
+                                flip_singles, flip_doubles);
 
         // compute the energy of the sample and store it in `energies`
         energies[sample] = get_state_energy(state, h, coupler_starts, 
-                                            coupler_ends, coupler_weights);
+                                            coupler_ends, coupler_weights,
+                                            t_coupler_starts, t_coupler_mids, t_coupler_ends,
+                                            t_coupler_weights);
 
         sample++;
 

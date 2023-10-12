@@ -416,7 +416,8 @@ int general_simulated_annealing(
     callback interrupt_callback,
     void * const interrupt_function,
     bool flip_singles,
-    bool flip_doubles
+    bool flip_doubles,
+    bool debug
 ) {
     // TODO 
     // assert len(states) == num_samples*num_vars*sizeof(char)
@@ -542,7 +543,9 @@ int general_simulated_annealing(
         // if interrupt_function returns true, stop sampling
         if (interrupt_function && interrupt_callback(interrupt_function)) break;
     }
-    printf("Performed %d single flips and %d double flips.\n", single_num, double_num);
+    if (debug) {
+        printf("Performed %d single flips and %d double flips.\n", single_num, double_num);
+    }
 
     // return the number of samples we actually took
     return sample;

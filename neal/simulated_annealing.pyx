@@ -43,6 +43,7 @@ cdef extern from "cpu_sa.h":
             void *interrupt_function,
             bool flip_singles,
             bool flip_doubles,
+            bool debug
             ) nogil
 
 
@@ -51,7 +52,8 @@ def simulated_annealing(num_samples, h, coupler_starts, coupler_ends,
                         t_coupler_ends, t_coupler_weights, sweeps_per_beta, beta_schedule, seed,
                         np.ndarray[char, ndim=2, mode="c"] states_numpy,
                         flip_singles, flip_doubles,
-                        interrupt_function=None):
+                        interrupt_function=None,
+                        debug=False):
     """Wraps `general_simulated_annealing` from `cpu_sa.cpp`. Accepts
     an Ising problem defined on a general graph and returns samples
     using simulated annealing.
@@ -110,6 +112,9 @@ def simulated_annealing(num_samples, h, coupler_starts, coupler_ends,
         called between samples and if it returns True, simulated annealing
         will return early with the samples it already has.
 
+    debug: bool
+        If True, print the amount of performed flips at every iteration.
+
     Returns
     -------
     samples : numpy.ndarray
@@ -148,6 +153,7 @@ def simulated_annealing(num_samples, h, coupler_starts, coupler_ends,
     cdef unsigned long long _seed = seed
     cdef bool _flip_singles = flip_singles
     cdef bool _flip_doubles = flip_doubles
+    cdef bool _debug = debug
 
     cdef void* _interrupt_function
     if interrupt_function is None:
@@ -173,7 +179,8 @@ def simulated_annealing(num_samples, h, coupler_starts, coupler_ends,
                                           interrupt_callback,
                                           _interrupt_function,
                                           _flip_singles,
-                                          _flip_doubles
+                                          _flip_doubles,
+                                          _debug
                                           )
 
     # discard the noise if we were interrupted

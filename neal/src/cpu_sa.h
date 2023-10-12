@@ -73,7 +73,8 @@ int general_simulated_annealing(
     callback interrupt_callback,
     void * const interrupt_function,
     bool flip_singles,
-    bool flip_doubles
+    bool flip_doubles,
+    bool debug
 );
 
 #endif

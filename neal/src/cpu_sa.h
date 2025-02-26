@@ -13,6 +13,7 @@
 // limitations under the License.
 //
 // ===========================================================================
+#include <cstdint>
 
 #ifndef _cpu_sa_h
 #define _cpu_sa_h
@@ -53,8 +54,6 @@ void simulated_annealing_run(
     bool flip_doubles
 );
 
-typedef bool (*const callback)(void * const function);
-
 int general_simulated_annealing(
     char *states,
     double *energies,
@@ -70,8 +69,6 @@ int general_simulated_annealing(
     const int sweeps_per_beta,
     const std::vector<double> beta_schedule,
     const uint64_t seed,
-    callback interrupt_callback,
-    void * const interrupt_function,
     bool flip_singles,
     bool flip_doubles,
     bool debug

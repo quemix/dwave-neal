@@ -17,6 +17,7 @@
 #include <math.h>
 #include <vector>
 #include <stdexcept>
+#include <cstdint>
 #include "cpu_sa.h"
 
 // xorshift128+ as defined https://en.wikipedia.org/wiki/Xorshift#xorshift.2B
@@ -392,12 +393,9 @@ double get_state_energy(
 //        `beta_schedule`.
 // @param beta_schedule A list of the beta values to run `sweeps_per_beta`
 //        sweeps at.
-// @param interrupt_callback A function that is invoked between each run of simulated annealing
-//        if the function returns True then it will stop running.
-// @param interrupt_function A pointer to contents that are passed to interrupt_callback.
 // @param flip_singles, if True allow single flips
 // @param flip_doubles, if True allow double flips
-// @return the number of samples taken. If no interrupt occured, will equal num_samples.
+// @return the number of samples taken.
 int general_simulated_annealing(
     char* states,
     double* energies,
@@ -413,8 +411,6 @@ int general_simulated_annealing(
     const int sweeps_per_beta,
     const vector<double> beta_schedule,
     const uint64_t seed,
-    callback interrupt_callback,
-    void * const interrupt_function,
     bool flip_singles,
     bool flip_doubles,
     bool debug
@@ -540,8 +536,6 @@ int general_simulated_annealing(
 
         sample++;
 
-        // if interrupt_function returns true, stop sampling
-        if (interrupt_function && interrupt_callback(interrupt_function)) break;
     }
     if (debug) {
         printf("Performed %d single flips and %d double flips.\n", single_num, double_num);

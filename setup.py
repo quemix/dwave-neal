@@ -60,7 +60,7 @@ extensions = [Extension(
 )]
 
 if USE_CYTHON:
-    extensions = cythonize(extensions, language='c++')
+    extensions = cythonize(extensions)
 
 packages = ['neal']
 

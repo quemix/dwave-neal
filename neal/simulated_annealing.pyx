@@ -1,4 +1,5 @@
 # distutils: language=c++
+# cython: language_level=3
 # Copyright 2018 D-Wave Systems Inc.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,7 +23,7 @@ import numpy as np
 cimport numpy as np
 
 cdef extern from "cpu_sa.h":
-    ctypedef bool (*callback)(void *function)
+    ctypedef bool (*callback)(void *) noexcept
 
     int general_simulated_annealing(
             char* samples,
@@ -39,8 +40,6 @@ cdef extern from "cpu_sa.h":
             const int sweeps_per_beta,
             const vector[double] & beta_schedule,
             const unsigned long long seed,
-            callback interrupt_callback,
-            void *interrupt_function,
             bool flip_singles,
             bool flip_doubles,
             bool debug
@@ -52,7 +51,6 @@ def simulated_annealing(num_samples, h, coupler_starts, coupler_ends,
                         t_coupler_ends, t_coupler_weights, sweeps_per_beta, beta_schedule, seed,
                         np.ndarray[char, ndim=2, mode="c"] states_numpy,
                         flip_singles, flip_doubles,
-                        interrupt_function=None,
                         debug=False):
     """Wraps `general_simulated_annealing` from `cpu_sa.cpp`. Accepts
     an Ising problem defined on a general graph and returns samples
@@ -107,11 +105,6 @@ def simulated_annealing(num_samples, h, coupler_starts, coupler_ends,
         not flip, look for a second spin to flip considering the total energy
         delta.
 
-    interrupt_function: function
-        Should accept no arguments and return a bool. The function is
-        called between samples and if it returns True, simulated annealing
-        will return early with the samples it already has.
-
     debug: bool
         If True, print the amount of performed flips at every iteration.
 
@@ -155,12 +148,6 @@ def simulated_annealing(num_samples, h, coupler_starts, coupler_ends,
     cdef bool _flip_doubles = flip_doubles
     cdef bool _debug = debug
 
-    cdef void* _interrupt_function
-    if interrupt_function is None:
-        _interrupt_function = NULL
-    else:
-        _interrupt_function = <void *>interrupt_function
-
     with nogil:
         num = general_simulated_annealing(_states,
                                           _energies,
@@ -176,20 +163,9 @@ def simulated_annealing(num_samples, h, coupler_starts, coupler_ends,
                                           _sweeps_per_beta,
                                           _beta_schedule,
                                           _seed,
-                                          interrupt_callback,
-                                          _interrupt_function,
                                           _flip_singles,
                                           _flip_doubles,
                                           _debug
                                           )
 
-    # discard the noise if we were interrupted
-    return states_numpy[:num], energies_numpy[:num]
-
-
-cdef bool interrupt_callback(void * const interrupt_function) with gil:
-    try:
-        return (<object>interrupt_function)()
-    except Exception:
-        # if an exception occurs, treat as an interrupt
-        return True
+    return states_numpy, energies_numpy

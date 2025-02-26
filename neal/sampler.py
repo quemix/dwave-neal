@@ -70,7 +70,6 @@ class SimulatedAnnealingSampler(dimod.Sampler, dimod.Initialized):
         beta_schedule_type
         initial_states
         initial_states_generator
-        interrupt_function
         num_reads
         num_sweeps
         num_sweeps_per_beta
@@ -103,7 +102,6 @@ class SimulatedAnnealingSampler(dimod.Sampler, dimod.Initialized):
                            'num_sweeps_per_beta': [],
                            'beta_schedule_type': ['beta_schedule_options'],
                            'seed': [],
-                           'interrupt_function': [],
                            'initial_states': [],
                            'initial_states_generator': [],
                            'flip_singles': [],
@@ -115,7 +113,7 @@ class SimulatedAnnealingSampler(dimod.Sampler, dimod.Initialized):
 
     def sample(self, bqm, beta_range=None, num_reads=None, num_sweeps = None,
                num_sweeps_per_beta=1, beta_schedule_type="geometric", seed=None,
-               interrupt_function=None, beta_schedule = None,
+               beta_schedule = None,
                initial_states=None, initial_states_generator="random",
                flip_singles=True, flip_doubles=False, debug=False,
                **kwargs):
@@ -198,12 +196,6 @@ class SimulatedAnnealingSampler(dimod.Sampler, dimod.Initialized):
                     Expands the specified initial states with randomly generated
                     states if fewer than ``num_reads`` or truncates if greater.
 
-            interrupt_function (function, optional):
-                If provided, interrupt_function is called with no parameters
-                between each sample of simulated annealing. If the function
-                returns True, then simulated annealing will terminate and return
-                with all of the samples and energies found so far.
-
             flip_singles: bool
                 If True allow flipping only single spins, in particular if a single
                 spin has been flipped the second is not considered anymore.
@@ -285,9 +277,6 @@ class SimulatedAnnealingSampler(dimod.Sampler, dimod.Initialized):
         ldata, (irow, icol, qdata), off = bqm.to_numpy_vectors(
             variable_order=variable_order)
 
-        if interrupt_function and not callable(interrupt_function):
-            raise TypeError("'interrupt_function' should be a callable")
-
         if not isinstance(num_sweeps_per_beta, Integral):
             error_msg = "'num_sweeps_per_beta' should be a positive integer: value = {}".format(num_sweeps_per_beta)
             raise TypeError(error_msg)
@@ -355,7 +344,7 @@ class SimulatedAnnealingSampler(dimod.Sampler, dimod.Initialized):
             num_reads, ldata, irow, icol, qdata,
             num_sweeps_per_beta, beta_schedule,
             seed, initial_states_array, flip_singles,
-            flip_doubles, interrupt_function, debug)
+            flip_doubles, debug)
 
         info = {
             "beta_range": beta_range,
